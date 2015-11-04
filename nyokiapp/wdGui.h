@@ -32,7 +32,7 @@ private:
   void woodDownButton8();
   void woodDownButton9();
   // max
-  const int WD_H_MAX = 5;
+  const int WD_H_MAX = 50;
   
   vector<int> prov;
 public:

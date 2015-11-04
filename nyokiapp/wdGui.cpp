@@ -23,7 +23,7 @@ void wdGui::setup(){
   wddb[7].addListener(this, &wdGui::woodDownButton8);
   wddb[8].addListener(this, &wdGui::woodDownButton9);
   for (int i = 0; i < WD; ++i) {
-    gwd.add(wdh[i].setup("wood " + ofToString(i + 1), 0, 0, 5));
+    gwd.add(wdh[i].setup("wood " + ofToString(i + 1), 0, 0, WD_H_MAX));
     gwd.add(wdub[i].setup("up_button " + ofToString(i + 1)));
     gwd.add(wddb[i].setup("down_button " + ofToString(i + 1)));
   }

@@ -68,6 +68,8 @@ class ofApp : public ofBaseApp{
     ofxIntSlider slider;
   
     // timer
+    int oscTimer;
+    bool oscTime;
     float stopTimer;
     float beginTimer;
     float endTimer;

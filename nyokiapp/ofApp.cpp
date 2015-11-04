@@ -6,6 +6,13 @@ long long int fib = 0;
 long long int fib_prev1 = 1;
 long long int fib_prev2 = 0;
 
+// -----------------------
+// MAX = 50
+int f = 10;
+// MAX = 5
+//int f = 1;
+//------------------------
+
 //--------------------------------------------------------------
 void ofApp::setup(){
   // set up tp screen
@@ -35,6 +42,8 @@ void ofApp::setup(){
   guiTimer.setup();
   guiTimer.add(st.setup("start", false));
   guiTimer.setPosition(ofGetWidth() - guiTimer.getWidth(), 0);
+  oscTimer = 0;
+  oscTime = false;
   
   // graph
   status = "";
@@ -53,7 +62,9 @@ void ofApp::setup(){
 //--------------------------------------------------------------
 void ofApp::update(){
   ofSetWindowTitle(ofToString(ofGetFrameRate()));
+  
   port.flush();
+  
   wood = wdgui.getHeight();
   
   // oscMessage
@@ -64,12 +75,29 @@ void ofApp::update(){
       string str = m.getArgAsString(0);
       if (str == "calc") { wdapp.setToggle(0); }
       else if (str == "timer") { wdapp.setToggle(1); }
-      else if (str == "graph") { wdapp.setToggle(2); }
+      else if (str == "graph") {
+        wdapp.setToggle(2);
+        for (int i = 0; i < 9; ++i) { wood[i] = 40; }
+        for (int i = 1; i <= 9; ++i) {
+          s[i] = intToUchar(wood[i - 1]);
+        }
+        port.writeBytes(s, sizeof(s));
+        wdgui.setHeight(wood);
+      }
       else if (str == "visualizer") { wdapp.setToggle(3); }
-      else if (str == "menu") { wdapp.unSelect(); }
+      else if (str == "menu") {
+        wdapp.unSelect();
+        for (int i = 0; i < 9; ++i) { wood[i] = 0; }
+        for (int i = 1; i <= 9; ++i) {
+          s[i] = intToUchar(wood[i - 1]);
+        }
+        port.writeBytes(s, sizeof(s));
+        wdgui.setHeight(wood);
+      }
     }
     if (m.getAddress() == "/visualizer") { int k = m.getArgAsInt32(0); selectMusic = k; }
     if (m.getAddress() == "/graph") { status = m.getArgAsString(0); }
+    if (m.getAddress() == "/timer") { oscTimer = m.getArgAsInt32(0); oscTime = true; startTimer = false; st = false; }
   }
   
   //
@@ -97,19 +125,20 @@ void ofApp::draw(){
     ofDrawBitmapStringHighlight(ofToString(result), ofGetWidth() / 2, ofGetHeight() / 2 - 200);
     gui.draw();
   }
+  
   else if (startTimer) {
     if (st) { ofDrawBitmapStringHighlight(ofToString(endTimer), ofGetWidth() / 2, ofGetHeight() / 2 - 200); }
     else { ofDrawBitmapStringHighlight(ofToString(stopTimer), ofGetWidth() / 2, ofGetHeight() / 2 - 200); }
     guiTimer.draw();
   }
   
-  
   for (int i = 0; i < 9; ++i) {
     ofPushStyle();
     ofSetColor(ofMap(i, 0, 8, 0, 255), ofMap(i, 0, 8, 100, 255), ofMap(i, 0, 8, 125, 255));
-    ofRect(i * width, ofGetHeight(), width, -(wood[i] * 100));
+    ofRect(i * width, ofGetHeight(), width, -(wood[i] * 10));
     ofPopStyle();
   }
+  
   // gui draw
   wdgui.draw();
   wdapp.draw();
@@ -124,9 +153,9 @@ void ofApp::claculator() {
   startTimer = false;
   
   int t = slider / 10;
-  for (int i = 0; i < 9; ++i) { wood[i] = t; }
+  for (int i = 0; i < 9; ++i) { wood[i] = t * f; }
   int dt = slider - (t * 10);
-  if (1 <= dt && dt <= 9) { wood[dt - 1] += 1; }
+  if (1 <= dt && dt <= 9) { wood[dt - 1] += (1 * f); }
   
   for (int i = 1; i <= 9; ++i) {
     s[i] = intToUchar(wood[i - 1]);
@@ -150,21 +179,42 @@ void ofApp::claculator() {
 void ofApp::timer() {
   if (startMusic) { player.stop(); startMusic = false; ofSetFrameRate(FRAME_RATE_NORMAL); playingMusic = 0; selectMusic = 0; }
   //
-  if (!startTimer || !st) {
+  if (oscTime && !startTimer) {
     beginTimer = ofGetElapsedTimef();
     startTimer = true;
-    stopTimer = 0;
-    for (int i = 0; i < 9; ++i) {
-      stopTimer += wood[i] * 6;
+    stopTimer = oscTimer;
+    st = true;
+    oscTime = false;
+    
+    for (int i = 0; i < 9; ++i) { wood[i] = 0; }
+    wdgui.setHeight(wood);
+    
+    float k = oscTimer / 0.6;
+    int s = oscTimer / 0.6;
+    int ind = 0, con = 0;
+    
+    if (k - s > 0) { s++; }
+    
+    for (int i = 0; i < s; ++i) {
+      if (con >= 50) {
+        ind++;
+        con = 0;
+      }
+      else {
+        wood[ind]++;
+        con++;
+      }
     }
+    
+    wdgui.setHeight(wood);
     wdgui.save(wood);
   }
   //
-  else if (startTimer && st) {
+  else if (startTimer && st && !oscTime) {
     wdgui.load();
     float t = ofGetElapsedTimef();
     if (t - beginTimer < stopTimer) {
-      if (t - beginTimer >= 6) {
+      if (t - beginTimer >= 0.6) {
         for (int i = 0; i < 9; ++i) {
           if (wood[i] > 0) { wood[i]--; wdgui.save(wood); wdgui.setHeight(wood); break; }
           wdgui.load();
@@ -179,7 +229,6 @@ void ofApp::timer() {
       m.setAddress("/timer");
       m.addIntArg((int)endTimer);
       sender.sendMessage(m);
-      
     }
     else {
       for (int i = 0; i < 9; ++i) { wood[i] = 0; }
@@ -237,7 +286,7 @@ void ofApp::glaph() {
     
     //cout << "n = " << n << ", s = " << s << endl;
     
-    wood[n - 1] = s / 10;
+    wood[n - 1] = s;
     wdgui.setHeight(wood);
   }
     
@@ -294,7 +343,7 @@ void ofApp::visialaizer() {
     }
 
     for (int i = 1; i <= 9; ++i) {
-      float y = ofMap(v[i - 1], 0.f, 1.f, 0.f, 5.f);
+      float y = ofMap(v[i - 1], 0.f, 1.f, 0.f, 50.f);
       s[i] = intToUchar(y);
       wood[i - 1] = y;
     }
@@ -398,6 +447,51 @@ unsigned char ofApp::intToUchar(int i) {
      case 3: return '3';
      case 4: return '4';
      case 5: return '5';
+     case 6: return '6';
+     case 7: return '7';
+     case 8: return '8';
+     case 9: return '9';
+     case 10: return 'A';
+     case 11: return 'B';
+     case 12: return 'C';
+     case 13: return 'D';
+     case 14: return 'E';
+     case 15: return 'F';
+     case 16: return 'G';
+     case 17: return 'H';
+     case 18: return 'I';
+     case 19: return 'J';
+     case 20: return 'K';
+     case 21: return 'L';
+     case 22: return 'M';
+     case 23: return 'N';
+     case 24: return 'O';
+     case 25: return 'P';
+     case 26: return 'Q';
+     case 27: return 'R';
+     case 28: return 'S';
+     case 29: return 'T';
+     case 30: return 'U';
+     case 31: return 'V';
+     case 32: return 'W';
+     case 33: return 'X';
+     case 34: return 'Y';
+     case 35: return 'Z';
+     case 36: return 'a';
+     case 37: return 'b';
+     case 38: return 'c';
+     case 39: return 'd';
+     case 40: return 'e';
+     case 41: return 'f';
+     case 42: return 'g';
+     case 43: return 'h';
+     case 44: return 'i';
+     case 45: return 'j';
+     case 46: return 'k';
+     case 47: return 'l';
+     case 48: return 'm';
+     case 49: return 'n';
+     case 50: return 'o';
   }
   return '0';
 }
